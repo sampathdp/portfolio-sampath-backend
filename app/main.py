@@ -26,18 +26,12 @@ app = FastAPI(
 )
 
 # CORS middleware configuration
-# Update this list with your frontend URL in production
-allowed_origins = [
-    "http://localhost:3000",  # Local development
-    "http://127.0.0.1:3000",  # Local development alternative
-    "https://portfolio-sampath-frontend.netlify.app/",  # Replace with your production frontend URL
-]
-
+# Allow all origins for now to test the connection
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,
+    allow_origins=["*"],  # Temporarily allow all origins for testing
     allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],
 )
