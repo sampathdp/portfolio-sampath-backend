@@ -2,7 +2,7 @@
 
 A FastAPI backend that powers an AI programming assistant using Google's Gemini API.
 
-## Setup Instructions
+## Local Development Setup
 
 1. **Clone the repository**
    ```bash
@@ -48,6 +48,50 @@ A FastAPI backend that powers an AI programming assistant using Google's Gemini 
 ## Environment Variables
 
 - `GEMINI_API_KEY`: Your Google Gemini API key
+
+## Deployment to Railway
+
+### Prerequisites
+- A Railway account (https://railway.app/)
+- A GitHub account with your repository connected
+- Your Google Gemini API key
+
+### Deployment Steps
+
+1. **Push your code to GitHub**
+   Make sure all your changes are committed and pushed to your GitHub repository.
+
+2. **Create a new Railway project**
+   - Go to https://railway.app/dashboard
+   - Click "New Project"
+   - Select "Deploy from GitHub repo"
+   - Select your repository and the branch you want to deploy
+   - Click "Deploy Now"
+
+3. **Set up environment variables**
+   - In your Railway project dashboard, go to the "Variables" tab
+   - Add your `GEMINI_API_KEY` with your actual Gemini API key
+   - Add `PORT` variable with value `8000` (Railway will automatically assign a port, but we include this as a fallback)
+
+4. **Configure deployment settings**
+   - Railway will automatically detect this is a Python project and use the `Procfile`
+   - The build process will install all dependencies from `requirements.txt`
+   - The server will start using the command in the `Procfile`
+
+5. **Access your deployed API**
+   - Once deployed, Railway will provide you with a public URL
+   - Access the API docs at `https://your-railway-url.railway.app/docs`
+   - Health check endpoint: `https://your-railway-url.railway.app/health`
+
+### Custom Domain (Optional)
+If you want to use a custom domain:
+1. Go to the "Settings" tab in your Railway project
+2. Click on "Generate Domain" under "Domains"
+3. Follow the instructions to set up a custom domain
+
+### Monitoring and Logs
+- Check the "Logs" tab in Railway for real-time logs
+- Monitor resource usage in the "Metrics" tab
 
 ## Development
 
