@@ -1,15 +1,16 @@
-from fastapi import FastAPI, HTTPException, Depends, Request, status
+# Standard library imports
+import logging
+import os
+import time
+from typing import List, Optional
+
+# Third-party imports
+import google.generativeai as genai
+from dotenv import load_dotenv
+from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
-import google.generativeai as genai
-import os
-import traceback
-import logging
-import time
-import random
-from dotenv import load_dotenv
-from typing import List, Dict, Optional
+from pydantic import BaseModel, Field
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -46,42 +47,114 @@ genai.configure(api_key=GEMINI_API_KEY)
 # Use gemini-1.5-flash for free tier (faster and more quota-friendly)
 model = genai.GenerativeModel('gemini-1.5-flash')
 
-# Enhanced rate limiter for free tier
 class RateLimiter:
-    def __init__(self, calls=15, period=60):  # 15 requests per minute for free tier
-        self.calls = calls
-        self.period = period
-        self.timestamps = []
+    """
+    Rate limiter to control the number of API calls within a specific time period.
+    Defaults to 15 requests per minute (Gemini free tier limit).
+    """
+    def __init__(self, calls: int = 15, period: int = 60) -> None:
+        """
+        Initialize the rate limiter.
+        
+        Args:
+            calls: Maximum number of allowed calls within the period
+            period: Time period in seconds for rate limiting
+        """
+        self.calls = max(1, calls)  # Ensure at least 1 call is allowed
+        self.period = max(1, period)  # Ensure period is at least 1 second
+        self.timestamps: List[float] = []
+        self.lock = False  # Simple lock to prevent race conditions
 
-    def __call__(self):
-        now = time.time()
-        # Remove timestamps older than the period
-        self.timestamps = [t for t in self.timestamps if now - t < self.period]
+    def __call__(self) -> None:
+        """
+        Check if the current call is allowed based on rate limits.
         
-        if len(self.timestamps) >= self.calls:
-            sleep_time = self.period - (now - self.timestamps[0])
-            if sleep_time > 0:
-                logger.warning(f"Rate limit reached. Sleeping for {sleep_time:.2f} seconds")
-                time.sleep(sleep_time + random.uniform(0.1, 0.5))  # Add jitter
-        
-        self.timestamps.append(time.time())
+        Raises:
+            HTTPException: If rate limit is exceeded
+        """
+        # Simple lock to prevent race conditions in a multi-threaded environment
+        while self.lock:
+            time.sleep(0.01)  # Small delay to prevent CPU spinning
+            
+        self.lock = True
+        try:
+            now = time.time()
+            
+            # Remove timestamps older than the period
+            self.timestamps = [t for t in self.timestamps if now - t < self.period]
+            
+            if len(self.timestamps) >= self.calls:
+                retry_after = int(self.period - (now - self.timestamps[0]))
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    headers={"Retry-After": str(retry_after)},
+                    detail={
+                        "error": "Rate limit exceeded",
+                        "retry_after_seconds": retry_after,
+                        "limit": self.calls,
+                        "period_seconds": self.period
+                    }
+                )
+            
+            self.timestamps.append(now)
+            
+        finally:
+            self.lock = False
 
 # Initialize rate limiter (15 requests per minute for free tier)
 rate_limiter = RateLimiter(calls=15, period=60)
 
 # Request/Response models
 class ChatMessage(BaseModel):
-    role: str
-    content: str
+    """Represents a single message in the chat conversation."""
+    role: str = Field(..., description="The role of the message sender (user/assistant)")
+    content: str = Field(..., min_length=1, description="The content of the message")
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "role": "user",
+                "content": "How do I write a for loop in Python?"
+            }
+        }
 
 class ChatRequest(BaseModel):
-    message: str
-    conversation_history: List[ChatMessage] = []
+    """Request model for chat endpoint."""
+    message: str = Field(..., min_length=1, max_length=2000, description="The user's message")
+    conversation_history: List[ChatMessage] = Field(
+        default_factory=list,
+        description="List of previous messages in the conversation"
+    )
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "message": "How do I write a for loop in Python?",
+                "conversation_history": []
+            }
+        }
+    }
 
 class ChatResponse(BaseModel):
-    response: str
-    is_code: bool = False
-    token_count: Optional[int] = None
+    """Response model for chat endpoint."""
+    response: str = Field(..., description="The assistant's response")
+    is_code: bool = Field(
+        default=False,
+        description="Indicates if the response contains code that should be formatted"
+    )
+    token_count: Optional[int] = Field(
+        default=None,
+        ge=0,
+        description="Number of tokens used in the response"
+    )
+    
+    class Config:
+        schema_extra = {
+            "example": {
+                "response": "Here's how to write a for loop in Python:\n```python\nfor i in range(5):\n    print(i)\n```",
+                "is_code": True,
+                "token_count": 42
+            }
+        }
 
 # Enhanced system prompt for programming assistant
 SYSTEM_PROMPT = """You are a helpful programming assistant for a campus project. 
