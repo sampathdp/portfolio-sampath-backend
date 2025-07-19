@@ -26,12 +26,20 @@ app = FastAPI(
 )
 
 # CORS middleware configuration
+# Update this list with your frontend URL in production
+allowed_origins = [
+    "http://localhost:3000",  # Local development
+    "http://127.0.0.1:3000",  # Local development alternative
+    "https://portfolio-sampath-frontend.netlify.app/",  # Replace with your production frontend URL
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # For development only, restrict in production
+    allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # Configure Gemini API
